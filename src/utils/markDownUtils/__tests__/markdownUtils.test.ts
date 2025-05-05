@@ -1,16 +1,28 @@
-const fs = require("fs").promises;
-const path = require("path");
-const MarkdownUtils = require("../markdownUtils");
+import fs from "fs/promises";
+import path from "path";
+import { MarkdownUtils } from "../markdownUtils";
 
 // Mock de fs.promises
-jest.mock("fs", () => ({
-  promises: {
-    readFile: jest.fn(),
-    writeFile: jest.fn(),
-    readdir: jest.fn(),
-    mkdir: jest.fn(),
-  },
+jest.mock("fs/promises", () => ({
+  readFile: jest.fn(),
+  writeFile: jest.fn(),
+  readdir: jest.fn(),
+  mkdir: jest.fn(),
 }));
+
+// Configurar los mocks
+const mockFs = {
+  readFile: jest.fn(),
+  writeFile: jest.fn(),
+  readdir: jest.fn(),
+  mkdir: jest.fn(),
+};
+
+// Reemplazar el mock por defecto con nuestro mock personalizado
+jest.mocked(fs).readFile = mockFs.readFile;
+jest.mocked(fs).writeFile = mockFs.writeFile;
+jest.mocked(fs).readdir = mockFs.readdir;
+jest.mocked(fs).mkdir = mockFs.mkdir;
 
 describe("MarkdownUtils", () => {
   const testDir = "./test-markdown";
@@ -24,17 +36,17 @@ describe("MarkdownUtils", () => {
 
   describe("readMarkdownFile", () => {
     it("debería leer correctamente un archivo Markdown", async () => {
-      fs.readFile.mockResolvedValue(testContent);
+      mockFs.readFile.mockResolvedValue(testContent);
 
       const content = await MarkdownUtils.readMarkdownFile(testFile);
 
-      expect(fs.readFile).toHaveBeenCalledWith(testFile, "utf-8");
+      expect(mockFs.readFile).toHaveBeenCalledWith(testFile, "utf-8");
       expect(content).toBe(testContent);
     });
 
     it("debería lanzar un error si el archivo no existe", async () => {
       const error = new Error("File not found");
-      fs.readFile.mockRejectedValue(error);
+      mockFs.readFile.mockRejectedValue(error);
 
       await expect(MarkdownUtils.readMarkdownFile(testFile)).rejects.toThrow(
         "Error al leer el archivo Markdown: File not found"
@@ -44,21 +56,21 @@ describe("MarkdownUtils", () => {
 
   describe("writeMarkdownFile", () => {
     it("debería escribir correctamente un archivo Markdown", async () => {
-      fs.mkdir.mockResolvedValue(undefined);
-      fs.writeFile.mockResolvedValue(undefined);
+      mockFs.mkdir.mockResolvedValue(undefined);
+      mockFs.writeFile.mockResolvedValue(undefined);
 
       await MarkdownUtils.writeMarkdownFile(testFile, testContent);
 
-      expect(fs.mkdir).toHaveBeenCalledWith(path.dirname(testFile), {
+      expect(mockFs.mkdir).toHaveBeenCalledWith(path.dirname(testFile), {
         recursive: true,
       });
-      expect(fs.writeFile).toHaveBeenCalledWith(testFile, testContent, "utf-8");
+      expect(mockFs.writeFile).toHaveBeenCalledWith(testFile, testContent, "utf-8");
     });
 
     it("debería lanzar un error si no se puede escribir el archivo", async () => {
       const error = new Error("Permission denied");
-      fs.mkdir.mockResolvedValue(undefined);
-      fs.writeFile.mockRejectedValue(error);
+      mockFs.mkdir.mockResolvedValue(undefined);
+      mockFs.writeFile.mockRejectedValue(error);
 
       await expect(
         MarkdownUtils.writeMarkdownFile(testFile, testContent)
@@ -71,17 +83,17 @@ describe("MarkdownUtils", () => {
   describe("listMarkdownFiles", () => {
     it("debería listar solo archivos Markdown", async () => {
       const files = ["test1.md", "test2.md", "test.txt", "test.js"];
-      fs.readdir.mockResolvedValue(files);
+      mockFs.readdir.mockResolvedValue(files);
 
       const markdownFiles = await MarkdownUtils.listMarkdownFiles(testDir);
 
-      expect(fs.readdir).toHaveBeenCalledWith(testDir);
+      expect(mockFs.readdir).toHaveBeenCalledWith(testDir);
       expect(markdownFiles).toEqual(["test1.md", "test2.md"]);
     });
 
     it("debería devolver un array vacío si no hay archivos Markdown", async () => {
       const files = ["test.txt", "test.js"];
-      fs.readdir.mockResolvedValue(files);
+      mockFs.readdir.mockResolvedValue(files);
 
       const markdownFiles = await MarkdownUtils.listMarkdownFiles(testDir);
 
@@ -90,11 +102,11 @@ describe("MarkdownUtils", () => {
 
     it("debería lanzar un error si no se puede leer el directorio", async () => {
       const error = new Error("Directory not found");
-      fs.readdir.mockRejectedValue(error);
+      mockFs.readdir.mockRejectedValue(error);
 
       await expect(MarkdownUtils.listMarkdownFiles(testDir)).rejects.toThrow(
         "Error al listar archivos Markdown: Directory not found"
       );
     });
   });
-});
+}); 

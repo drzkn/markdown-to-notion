@@ -1,42 +1,51 @@
-const { Client } = require("@notionhq/client");
+import { Client } from "@notionhq/client";
+import {
+  NotionBlock,
+  NotionBlocksResponse,
+  NotionPageResponse,
+  NotionRichText,
+} from "../../types/notion";
 
-class NotionService {
-  constructor(apiKey) {
+type BlockObjectRequest = Parameters<Client["blocks"]["children"]["append"]>[0]["children"][0];
+
+export class NotionService {
+  private notion: Client;
+
+  constructor(apiKey: string) {
     this.notion = new Client({ auth: apiKey });
   }
 
-  // Convertir bloques de Notion a Markdown
-  async blocksToMarkdown(blockId) {
+  async blocksToMarkdown(blockId: string): Promise<string> {
     const blocks = await this.notion.blocks.children.list({
       block_id: blockId,
     });
 
     let markdown = "";
 
-    for (const block of blocks.results) {
+    for (const block of (blocks as NotionBlocksResponse).results) {
       switch (block.type) {
         case "paragraph":
-          markdown += this._paragraphToMarkdown(block.paragraph) + "\n\n";
+          markdown += this._paragraphToMarkdown(block.paragraph!) + "\n\n";
           break;
         case "heading_1":
-          markdown += this._headingToMarkdown(block.heading_1, 1) + "\n\n";
+          markdown += this._headingToMarkdown(block.heading_1!, 1) + "\n\n";
           break;
         case "heading_2":
-          markdown += this._headingToMarkdown(block.heading_2, 2) + "\n\n";
+          markdown += this._headingToMarkdown(block.heading_2!, 2) + "\n\n";
           break;
         case "heading_3":
-          markdown += this._headingToMarkdown(block.heading_3, 3) + "\n\n";
+          markdown += this._headingToMarkdown(block.heading_3!, 3) + "\n\n";
           break;
         case "bulleted_list_item":
           markdown +=
-            this._listItemToMarkdown(block.bulleted_list_item, "-") + "\n";
+            this._listItemToMarkdown(block.bulleted_list_item!, "-") + "\n";
           break;
         case "numbered_list_item":
           markdown +=
-            this._listItemToMarkdown(block.numbered_list_item, "1.") + "\n";
+            this._listItemToMarkdown(block.numbered_list_item!, "1.") + "\n";
           break;
         case "code":
-          markdown += this._codeToMarkdown(block.code) + "\n\n";
+          markdown += this._codeToMarkdown(block.code!) + "\n\n";
           break;
       }
     }
@@ -44,8 +53,11 @@ class NotionService {
     return markdown;
   }
 
-  // Crear una página en Notion desde Markdown
-  async createPageFromMarkdown(databaseId, title, markdownContent) {
+  async createPageFromMarkdown(
+    databaseId: string,
+    title: string,
+    markdownContent: string
+  ): Promise<NotionPageResponse> {
     const blocks = this._markdownToBlocks(markdownContent);
 
     const response = await this.notion.pages.create({
@@ -61,42 +73,49 @@ class NotionService {
           ],
         },
       },
-      children: blocks,
+      children: blocks as BlockObjectRequest[],
     });
 
-    return response;
+    return response as NotionPageResponse;
   }
 
-  // Métodos privados de conversión
-  _paragraphToMarkdown(paragraph) {
-    return paragraph.rich_text.map((text) => text.plain_text).join("");
+  private _paragraphToMarkdown(paragraph: { rich_text: NotionRichText[] }): string {
+    return paragraph.rich_text.map((text) => text.text.content).join("");
   }
 
-  _headingToMarkdown(heading, level) {
-    const content = heading.rich_text.map((text) => text.plain_text).join("");
+  private _headingToMarkdown(
+    heading: { rich_text: NotionRichText[] },
+    level: number
+  ): string {
+    const content = heading.rich_text.map((text) => text.text.content).join("");
     return "#".repeat(level) + " " + content;
   }
 
-  _listItemToMarkdown(listItem, prefix) {
-    const content = listItem.rich_text.map((text) => text.plain_text).join("");
+  private _listItemToMarkdown(
+    listItem: { rich_text: NotionRichText[] },
+    prefix: string
+  ): string {
+    const content = listItem.rich_text.map((text) => text.text.content).join("");
     return `${prefix} ${content}`;
   }
 
-  _codeToMarkdown(code) {
-    const content = code.rich_text.map((text) => text.plain_text).join("");
+  private _codeToMarkdown(code: {
+    rich_text: NotionRichText[];
+    language?: string;
+  }): string {
+    const content = code.rich_text.map((text) => text.text.content).join("");
     return "```" + (code.language || "") + "\n" + content + "\n```";
   }
 
-  _markdownToBlocks(markdown) {
+  private _markdownToBlocks(markdown: string): NotionBlock[] {
     const lines = markdown.split("\n");
-    const blocks = [];
-    let currentListItems = [];
+    const blocks: NotionBlock[] = [];
+    let currentListItems: NotionBlock[] = [];
     let inCodeBlock = false;
-    let codeContent = [];
+    let codeContent: string[] = [];
     let codeLanguage = "";
 
     for (let line of lines) {
-      // Manejar bloques de código
       if (line.startsWith("```")) {
         if (!inCodeBlock) {
           inCodeBlock = true;
@@ -104,7 +123,6 @@ class NotionService {
         } else {
           inCodeBlock = false;
           blocks.push({
-            object: "block",
             type: "code",
             code: {
               rich_text: [
@@ -123,13 +141,11 @@ class NotionService {
         continue;
       }
 
-      // Manejar encabezados
       if (line.startsWith("#")) {
-        const level = line.match(/^#+/)[0].length;
+        const level = line.match(/^#+/)?.[0].length || 1;
         const content = line.replace(/^#+\s*/, "");
         blocks.push({
-          object: "block",
-          type: `heading_${level}`,
+          type: `heading_${level}` as "heading_1" | "heading_2" | "heading_3",
           [`heading_${level}`]: {
             rich_text: [{ type: "text", text: { content } }],
           },
@@ -137,11 +153,9 @@ class NotionService {
         continue;
       }
 
-      // Manejar listas
       if (line.match(/^[-*]\s/)) {
         const content = line.replace(/^[-*]\s/, "");
         currentListItems.push({
-          object: "block",
           type: "bulleted_list_item",
           bulleted_list_item: {
             rich_text: [{ type: "text", text: { content } }],
@@ -153,7 +167,6 @@ class NotionService {
       if (line.match(/^\d+\.\s/)) {
         const content = line.replace(/^\d+\.\s/, "");
         currentListItems.push({
-          object: "block",
           type: "numbered_list_item",
           numbered_list_item: {
             rich_text: [{ type: "text", text: { content } }],
@@ -162,17 +175,14 @@ class NotionService {
         continue;
       }
 
-      // Si hay elementos de lista pendientes, agregarlos
       if (currentListItems.length > 0 && line.trim() === "") {
         blocks.push(...currentListItems);
         currentListItems = [];
         continue;
       }
 
-      // Párrafos normales
       if (line.trim() !== "") {
         blocks.push({
-          object: "block",
           type: "paragraph",
           paragraph: {
             rich_text: [{ type: "text", text: { content: line } }],
@@ -181,13 +191,10 @@ class NotionService {
       }
     }
 
-    // Agregar cualquier elemento de lista pendiente
     if (currentListItems.length > 0) {
       blocks.push(...currentListItems);
     }
 
     return blocks;
   }
-}
-
-module.exports = NotionService;
+} 
