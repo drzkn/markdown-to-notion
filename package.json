@@ -1,0 +1,31 @@
+{
+  "name": "markdown-to-notion",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "sync-to-notion": "node src/index.js --to-notion",
+    "sync-to-markdown": "node src/index.js --to-markdown",
+    "sync-all": "node src/index.js --sync-all",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "keywords": [
+    "notion",
+    "markdown",
+    "sync"
+  ],
+  "author": "",
+  "license": "ISC",
+  "description": "Herramienta para sincronizar contenido entre archivos Markdown y Notion",
+  "dependencies": {
+    "@notionhq/client": "^2.3.0",
+    "dotenv": "^16.4.7",
+    "remark": "^15.0.1",
+    "remark-parse": "^11.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
